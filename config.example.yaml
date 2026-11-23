@@ -161,11 +161,13 @@ clients:
     api_base: https://api.anthropic.com/v1            # Optional
     api_key: xxx
 
-  # See https://docs.mistral.ai/
-  - type: openai-compatible
+  # See https://docs.mistral.ai/api/endpoint/beta/conversations
+  - type: mistral
     name: mistral
-    api_base: https://api.mistral.ai/v1
+    api_base: https://api.mistral.ai/v1               # Optional
     api_key: xxx
+    builtin_tools:                                    # Optional: function, web_search, web_search_premium, code_interpreter, image_generation, document_library, connector
+      - web_search
 
   # See https://docs.x.ai/docs
   - type: openai-compatible
