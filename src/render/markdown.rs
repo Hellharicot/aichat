@@ -5,10 +5,11 @@ use anyhow::{anyhow, Context, Result};
 use crossterm::style::{Color, Stylize};
 use crossterm::terminal;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::LazyLock;
+use syntect::easy::HighlightLines;
 use syntect::highlighting::{Color as SyntectColor, FontStyle, Style, Theme};
-use syntect::parsing::SyntaxSet;
-use syntect::{easy::HighlightLines, parsing::SyntaxReference};
+use syntect::parsing::{ScopeStack, SyntaxReference, SyntaxSet};
 
 /// Comes from <https://github.com/sharkdp/bat/raw/5e77ca37e89c873e4490b42ff556370dc5c6ba4f/assets/syntaxes.bin>
 const SYNTAXES: &[u8] = include_bytes!("../../assets/syntaxes.bin");
@@ -26,6 +27,7 @@ pub struct MarkdownRender {
     code_color: Option<Color>,
     md_syntax: SyntaxReference,
     code_syntax: Option<SyntaxReference>,
+    think_style: Option<Style>,
     prev_line_type: LineType,
     wrap_width: Option<u16>,
 }
@@ -35,6 +37,10 @@ impl MarkdownRender {
         let syntax_set: SyntaxSet =
             decode_bin(SYNTAXES).with_context(|| "MarkdownRender: invalid syntaxes binary")?;
 
+        let think_style = options
+            .theme
+            .as_ref()
+            .and_then(|theme| get_scope_style(theme, &["think", "comment"]));
         let code_color = options
             .theme
             .as_ref()
@@ -60,6 +66,7 @@ impl MarkdownRender {
         Ok(Self {
             syntax_set,
             code_color,
+            think_style,
             md_syntax,
             code_syntax: None,
             prev_line_type: line_type,
@@ -76,8 +83,10 @@ impl MarkdownRender {
     }
 
     pub fn render_line(&self, line: &str) -> String {
-        let (_, code_syntax, is_code) = self.check_line(line);
-        if is_code {
+        let (_, code_syntax, is_code, is_think) = self.check_line(line);
+        if is_think {
+            self.highlight_think_line(line)
+        } else if is_code {
             self.highlight_code_line(line, &code_syntax)
         } else {
             self.highlight_line(line, &self.md_syntax, false)
@@ -85,8 +94,10 @@ impl MarkdownRender {
     }
 
     fn render_line_mut(&mut self, line: &str) -> String {
-        let (line_type, code_syntax, is_code) = self.check_line(line);
-        let output = if is_code {
+        let (line_type, code_syntax, is_code, is_think) = self.check_line(line);
+        let output = if is_think {
+            self.highlight_think_line(line)
+        } else if is_code {
             self.highlight_code_line(line, &code_syntax)
         } else {
             self.highlight_line(line, &self.md_syntax, false)
@@ -96,46 +107,58 @@ impl MarkdownRender {
         output
     }
 
-    fn check_line(&self, line: &str) -> (LineType, Option<SyntaxReference>, bool) {
+    fn check_line(&self, line: &str) -> (LineType, Option<SyntaxReference>, bool, bool) {
         let mut line_type = self.prev_line_type;
         let mut code_syntax = self.code_syntax.clone();
         let mut is_code = false;
-        if let Some(lang) = detect_code_block(line) {
-            match line_type {
-                LineType::Normal | LineType::CodeEnd => {
+        let mut is_think = false;
+
+        match line_type {
+            LineType::ThinkBegin | LineType::ThinkInner => {
+                is_think = true;
+                line_type = if line.contains("</think>") {
+                    LineType::ThinkEnd
+                } else {
+                    LineType::ThinkInner
+                };
+            }
+            LineType::Normal | LineType::CodeEnd | LineType::ThinkEnd => {
+                if detect_think_tag(line) == Some(true) {
+                    is_think = true;
+                    line_type = if line.contains("</think>") {
+                        LineType::ThinkEnd
+                    } else {
+                        LineType::ThinkBegin
+                    };
+                } else if let Some(lang) = detect_code_block(line) {
                     line_type = LineType::CodeBegin;
+                    is_code = true;
                     code_syntax = if lang.is_empty() {
                         None
                     } else {
                         self.find_syntax(&lang).cloned()
                     };
-                }
-                LineType::CodeBegin | LineType::CodeInner => {
-                    line_type = LineType::CodeEnd;
-                    code_syntax = None;
-                }
-            }
-        } else {
-            match line_type {
-                LineType::Normal => {}
-                LineType::CodeEnd => {
+                } else {
                     line_type = LineType::Normal;
                 }
-                LineType::CodeBegin => {
+            }
+            LineType::CodeBegin | LineType::CodeInner => {
+                is_code = true;
+                if detect_code_block(line).is_some() {
+                    line_type = LineType::CodeEnd;
+                    code_syntax = None;
+                } else {
                     if code_syntax.is_none() {
                         if let Some(syntax) = self.syntax_set.find_syntax_by_first_line(line) {
                             code_syntax = Some(syntax.clone());
                         }
                     }
                     line_type = LineType::CodeInner;
-                    is_code = true;
-                }
-                LineType::CodeInner => {
-                    is_code = true;
                 }
             }
         }
-        (line_type, code_syntax, is_code)
+
+        (line_type, code_syntax, is_code, is_think)
     }
 
     fn highlight_line(&self, line: &str, syntax: &SyntaxReference, is_code: bool) -> String {
@@ -153,6 +176,14 @@ impl MarkdownRender {
         }
         let line = line_highlighted.unwrap_or_else(|| line.into());
         self.wrap_line(line, is_code)
+    }
+
+    fn highlight_think_line(&self, line: &str) -> String {
+        let line = self.wrap_line(line.to_string(), false);
+        match self.think_style {
+            Some(style) => as_terminal_escaped(&[(style, line.as_str())], self.options.truecolor),
+            None => line,
+        }
     }
 
     fn highlight_code_line(&self, line: &str, code_syntax: &Option<SyntaxReference>) -> String {
@@ -227,6 +258,9 @@ pub enum LineType {
     CodeBegin,
     CodeInner,
     CodeEnd,
+    ThinkBegin,
+    ThinkInner,
+    ThinkEnd,
 }
 
 fn as_terminal_escaped(ranges: &[(Style, &str)], truecolor: bool) -> String {
@@ -292,6 +326,17 @@ fn detect_code_block(line: &str) -> Option<String> {
     Some(lang)
 }
 
+fn detect_think_tag(line: &str) -> Option<bool> {
+    let line = line.trim_start();
+    if line.starts_with("<think>") {
+        return Some(true);
+    } else if line.contains("</think>") {
+        return Some(false);
+    } else {
+        None
+    }
+}
+
 fn get_code_color(theme: &Theme, truecolor: bool) -> Color {
     let scope = theme.scopes.iter().find(|v| {
         v.scope
@@ -302,6 +347,30 @@ fn get_code_color(theme: &Theme, truecolor: bool) -> Color {
     scope
         .and_then(|v| v.style.foreground)
         .map_or_else(|| Color::Yellow, |c| convert_color(c, truecolor))
+}
+
+fn get_scope_style(theme: &Theme, scopes: &[&str]) -> Option<Style> {
+    let default_fg = theme.settings.foreground.unwrap_or(SyntectColor::WHITE);
+    let default_bg = theme.settings.background.unwrap_or(SyntectColor::BLACK);
+
+    for scope in scopes {
+        let Ok(stack) = ScopeStack::from_str(scope) else {
+            continue;
+        };
+        if let Some(sel) = theme
+            .scopes
+            .iter()
+            .rev()
+            .find(|s| s.scope.does_match(stack.as_slice()).is_some())
+        {
+            return Some(Style {
+                foreground: sel.style.foreground.unwrap_or(default_fg),
+                background: sel.style.background.unwrap_or(default_bg),
+                font_style: sel.style.font_style.unwrap_or(FontStyle::empty()),
+            });
+        }
+    }
+    None
 }
 
 #[cfg(test)]
