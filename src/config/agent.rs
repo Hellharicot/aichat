@@ -312,14 +312,15 @@ impl Agent {
     }
 
     fn run_instructions_fn(&self) -> Result<String> {
-        let value = run_llm_function(
+        let (exit_code, value) = run_llm_function(
             self.name().to_string(),
             vec!["_instructions".into(), "{}".into()],
             self.variable_envs(),
         )?;
-        match value {
-            Some(v) => Ok(v),
-            _ => bail!("No return value from '_instructions' function"),
+        match (exit_code, value) {
+            (0, Some(v)) => Ok(v),
+            (0, None) => bail!("No return value from '_instructions' function"),
+            (exit_code, _) => bail!("Tool call exit with {exit_code}"),
         }
     }
 }

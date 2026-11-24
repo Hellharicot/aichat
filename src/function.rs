@@ -196,10 +196,13 @@ impl ToolCall {
         cmd_args.push(json_data.to_string());
 
         let output = match run_llm_function(cmd_name, cmd_args, envs)? {
-            Some(contents) => serde_json::from_str(&contents)
+            (0, Some(contents)) => serde_json::from_str(&contents)
                 .ok()
                 .unwrap_or_else(|| json!({"output": contents})),
-            None => Value::Null,
+            (0, None) => Value::Null,
+            (exit_code, contents) => {
+                json!({"error": format!("Tool call exit with {exit_code}"), "output": contents})
+            }
         };
 
         Ok(output)
@@ -252,7 +255,7 @@ pub fn run_llm_function(
     cmd_name: String,
     cmd_args: Vec<String>,
     mut envs: HashMap<String, String>,
-) -> Result<Option<String>> {
+) -> Result<(i32, Option<String>)> {
     let prompt = format!("Call {cmd_name} {}", cmd_args.join(" "));
 
     let mut bin_dirs: Vec<PathBuf> = vec![];
@@ -281,9 +284,6 @@ pub fn run_llm_function(
     }
     let exit_code = run_command(&cmd_name, &cmd_args, Some(envs))
         .map_err(|err| anyhow!("Unable to run {cmd_name}, {err}"))?;
-    if exit_code != 0 {
-        bail!("Tool call exit with {exit_code}");
-    }
     let mut output = None;
     if temp_file.exists() {
         let contents =
@@ -292,7 +292,7 @@ pub fn run_llm_function(
             output = Some(contents);
         }
     };
-    Ok(output)
+    Ok((exit_code, output))
 }
 
 #[cfg(windows)]
