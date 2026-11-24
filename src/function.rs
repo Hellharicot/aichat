@@ -29,7 +29,10 @@ pub fn eval_tool_calls(config: &GlobalConfig, mut calls: Vec<ToolCall>) -> Resul
     }
     let mut is_all_null = true;
     for call in calls {
-        let mut result = call.eval(config)?;
+        let mut result = match call.eval(config) {
+            Ok(result) => result,
+            Err(err) => json!({"error": err.to_string()}),
+        };
         if result.is_null() {
             result = json!("DONE");
         } else {
