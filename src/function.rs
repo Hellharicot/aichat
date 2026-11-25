@@ -46,6 +46,25 @@ pub fn eval_tool_calls(config: &GlobalConfig, mut calls: Vec<ToolCall>) -> Resul
     }
     let mut is_all_null = true;
     for call in calls {
+        if call.name == "load_toolkit" {
+            let tk_name = call
+                .arguments
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let mut cfg = config.write();
+            let result = match cfg.toolkits.get(tk_name) {
+                Some(tk) => {
+                    let tools = tk.tools.clone();
+                    cfg.active_toolkits.insert(tk_name.to_string());
+                    json!({"status": "loaded", "toolkit": tk_name, "tools": tools})
+                }
+                None => json!({"error": format!("Unknown toolkit '{tk_name}'")}),
+            };
+            is_all_null = false;
+            output.push(ToolResult::new(call, result));
+            continue;
+        }
         let mut result = match call.eval(config) {
             Ok(result) => result,
             Err(err) => json!({"error": err.to_string()}),
@@ -150,6 +169,100 @@ impl JsonSchema {
             Some(v) => v.is_empty(),
             None => true,
         }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Toolkit {
+    pub description: String,
+    pub tools: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Toolkits {
+    map: IndexMap<String, Toolkit>,
+}
+
+impl Toolkits {
+    pub fn init(path: &Path) -> Result<Self> {
+        let map: IndexMap<String, Toolkit> = if path.exists() {
+            let ctx = || format!("Failed to load toolkits at {}", path.display());
+            let content = fs::read_to_string(path).with_context(ctx)?;
+            serde_json::from_str(&content).with_context(ctx)?
+        } else {
+            IndexMap::new()
+        };
+        Ok(Self { map })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Toolkit> {
+        self.map.get(name)
+    }
+
+    pub fn contains_tool(&self, tool_name: &str) -> bool {
+        self.map
+            .values()
+            .any(|tk| tk.tools.iter().any(|t| t == tool_name))
+    }
+
+    pub fn is_tool_active(&self, tool_name: &str, active: &HashSet<String>) -> bool {
+        active.iter().any(|tk_name| {
+            self.map
+                .get(tk_name)
+                .is_some_and(|tk| tk.tools.iter().any(|t| t == tool_name))
+        })
+    }
+
+    pub fn loader_declaration(&self, active: &HashSet<String>) -> Option<FunctionDeclaration> {
+        let available: Vec<(&String, &Toolkit)> = self
+            .map
+            .iter()
+            .filter(|(name, _)| !active.contains(*name))
+            .collect();
+        if available.is_empty() {
+            return None;
+        }
+        let summary = available
+            .iter()
+            .map(|(k, v)| format!("- {k}: {}", v.description))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let enum_values = available.iter().map(|(k, _)| (*k).clone()).collect();
+
+        let mut props = IndexMap::new();
+        props.insert(
+            "name".to_string(),
+            JsonSchema {
+                type_value: Some("string".to_string()),
+                description: Some("Toolkit name to load".to_string()),
+                properties: None,
+                items: None,
+                any_of: None,
+                enum_value: Some(enum_values),
+                default: None,
+                required: None,
+            },
+        );
+
+        Some(FunctionDeclaration {
+            name: "load_toolkit".to_string(),
+            description: format!("Load a toolkit to unlock its tools for the current session.\nAvailable toolkits:\n{summary}"),
+            parameters: JsonSchema {
+                type_value: Some("object".to_string()),
+                description: None,
+                properties: Some(props),
+                items: None,
+                any_of: None,
+                enum_value: None,
+                default: None,
+                required: Some(vec!["name".to_string()]),
+            },
+            agent: false,
+        })
     }
 }
 

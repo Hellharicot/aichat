@@ -14,7 +14,7 @@ use crate::client::{
     create_client_config, list_client_types, list_models, ClientConfig, MessageContentToolCalls,
     Model, ModelType, ProviderModels, OPENAI_COMPATIBLE_PROVIDERS,
 };
-use crate::function::{FunctionDeclaration, Functions, ToolResult};
+use crate::function::{FunctionDeclaration, Functions, ToolResult, Toolkits};
 use crate::rag::Rag;
 use crate::render::{MarkdownRender, RenderOptions};
 use crate::repl::{run_repl_command, split_args_text};
@@ -59,6 +59,7 @@ const RAGS_DIR_NAME: &str = "rags";
 const FUNCTIONS_DIR_NAME: &str = "functions";
 const FUNCTIONS_FILE_NAME: &str = "functions.json";
 const FUNCTIONS_BIN_DIR_NAME: &str = "bin";
+const TOOLKITS_FILE_NAME: &str = "toolkits.json";
 const AGENTS_DIR_NAME: &str = "agents";
 
 const CLIENTS_FIELD: &str = "clients";
@@ -116,6 +117,10 @@ pub struct Config {
     pub function_calling: bool,
     pub mapping_tools: IndexMap<String, String>,
     pub use_tools: Option<String>,
+    #[serde(skip)]
+    pub toolkits: Toolkits,
+    #[serde(skip)]
+    pub active_toolkits: HashSet<String>,
 
     pub repl_prelude: Option<String>,
     pub cmd_prelude: Option<String>,
@@ -192,6 +197,8 @@ impl Default for Config {
             function_calling: true,
             mapping_tools: Default::default(),
             use_tools: None,
+            toolkits: Default::default(),
+            active_toolkits: Default::default(),
 
             repl_prelude: None,
             cmd_prelude: None,
@@ -377,6 +384,10 @@ impl Config {
 
     pub fn functions_bin_dir() -> PathBuf {
         Self::functions_dir().join(FUNCTIONS_BIN_DIR_NAME)
+    }
+
+    pub fn toolkits_file() -> PathBuf {
+        Self::functions_dir().join(TOOLKITS_FILE_NAME)
     }
 
     pub fn session_file(&self, name: &str) -> PathBuf {
@@ -1150,6 +1161,7 @@ impl Config {
             let sessions_dir = self.sessions_dir();
             session.exit(&sessions_dir, self.working_mode.is_repl())?;
             self.discontinuous_last_message();
+            self.active_toolkits.clear();
         }
         Ok(())
     }
@@ -1201,6 +1213,7 @@ impl Config {
             bail!("No session")
         }
         self.discontinuous_last_message();
+        self.active_toolkits.clear();
         Ok(())
     }
 
@@ -1559,6 +1572,7 @@ impl Config {
         if self.agent.take().is_some() {
             self.rag.take();
             self.discontinuous_last_message();
+            self.active_toolkits.clear();
         }
         Ok(())
     }
@@ -1709,6 +1723,16 @@ impl Config {
                         .filter(|v| !tool_names.contains(&v.name)),
                 );
                 functions = agent_functions;
+            }
+
+            if !self.toolkits.is_empty() && !functions.is_empty() {
+                functions.retain(|f| {
+                    !self.toolkits.contains_tool(&f.name)
+                        || self.toolkits.is_tool_active(&f.name, &self.active_toolkits)
+                });
+                if let Some(loader) = self.toolkits.loader_declaration(&self.active_toolkits) {
+                    functions.push(loader);
+                }
             }
         };
         if functions.is_empty() {
@@ -2382,6 +2406,7 @@ impl Config {
 
     fn load_functions(&mut self) -> Result<()> {
         self.functions = Functions::init(&Self::functions_file())?;
+        self.toolkits = Toolkits::init(&Self::toolkits_file())?;
         Ok(())
     }
 
