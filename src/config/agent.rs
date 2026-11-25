@@ -529,22 +529,31 @@ pub struct AgentVariable {
 }
 
 pub fn list_agents() -> Vec<String> {
-    let agents_file = Config::functions_dir().join("agents.txt");
-    let contents = match read_to_string(agents_file) {
-        Ok(v) => v,
-        Err(_) => return vec![],
-    };
-    contents
-        .split('\n')
-        .filter_map(|line| {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                None
-            } else {
-                Some(line.to_string())
+    let mut agents = std::collections::BTreeSet::new();
+
+    let agents_dir = Config::functions_dir().join("agents");
+    if let Ok(entries) = std::fs::read_dir(agents_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join("index.yaml").is_file() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    agents.insert(name.to_string());
+                }
             }
-        })
-        .collect()
+        }
+    }
+
+    let agents_file = Config::functions_dir().join("agents.txt");
+    if let Ok(contents) = read_to_string(agents_file) {
+        for line in contents.lines() {
+            let name = line.trim();
+            if !name.is_empty() {
+                agents.insert(name.to_string());
+            }
+        }
+    }
+
+    agents.into_iter().collect()
 }
 
 pub fn complete_agent_variables(agent_name: &str) -> Vec<(String, Option<String>)> {
