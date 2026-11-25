@@ -18,6 +18,23 @@ const PATH_SEP: &str = ";";
 #[cfg(not(windows))]
 const PATH_SEP: &str = ":";
 
+const MAX_TOOL_OUTPUT_CHARS: usize = 12_000;
+
+fn truncate_tool_output(output: String) -> String {
+    match output.char_indices().nth(MAX_TOOL_OUTPUT_CHARS) {
+        Some((byte_idx, _)) => {
+            let omitted = output.chars().count() - MAX_TOOL_OUTPUT_CHARS;
+            format!(
+                "{}\n\n[TRUNCATED: {} characters omitted (limit: {}). Narrow your query or use line ranges.]",
+                &output[..byte_idx],
+                omitted,
+                MAX_TOOL_OUTPUT_CHARS
+            )
+        }
+        None => output,
+    }
+}
+
 pub fn eval_tool_calls(config: &GlobalConfig, mut calls: Vec<ToolCall>) -> Result<Vec<ToolResult>> {
     let mut output = vec![];
     if calls.is_empty() {
@@ -196,11 +213,15 @@ impl ToolCall {
         cmd_args.push(json_data.to_string());
 
         let output = match run_llm_function(cmd_name, cmd_args, envs)? {
-            (0, Some(contents)) => serde_json::from_str(&contents)
-                .ok()
-                .unwrap_or_else(|| json!({"output": contents})),
+            (0, Some(contents)) => {
+                let contents = truncate_tool_output(contents);
+                serde_json::from_str(&contents)
+                    .ok()
+                    .unwrap_or_else(|| json!({"output": contents}))
+            }
             (0, None) => Value::Null,
             (exit_code, contents) => {
+                let contents = contents.map(truncate_tool_output);
                 json!({"error": format!("Tool call exit with {exit_code}"), "output": contents})
             }
         };
