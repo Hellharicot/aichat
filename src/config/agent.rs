@@ -49,6 +49,13 @@ impl Agent {
             AgentConfig::new(&config.read())
         };
         let mut definition = AgentDefinition::load(&definition_file_path)?;
+        if agent_config.use_tools.is_none()
+            || (!config_path.exists() && definition.use_tools.is_some())
+        {
+            if let Some(use_tools) = &definition.use_tools {
+                agent_config.use_tools = Some(use_tools.clone());
+            }
+        }
         let functions = if functions_file_path.exists() {
             Functions::init(&functions_file_path)?
         } else {
@@ -438,6 +445,8 @@ pub struct AgentDefinition {
     pub description: String,
     #[serde(default)]
     pub version: String,
+    #[serde(default)]
+    pub use_tools: Option<String>,
     #[serde(default)]
     pub instructions: String,
     #[serde(default)]

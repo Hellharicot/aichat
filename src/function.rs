@@ -217,11 +217,17 @@ impl Toolkits {
         })
     }
 
-    pub fn loader_declaration(&self, active: &HashSet<String>) -> Option<FunctionDeclaration> {
+    pub fn loader_declaration(
+        &self,
+        active: &HashSet<String>,
+        allowed_tools: &HashSet<String>,
+    ) -> Option<FunctionDeclaration> {
         let available: Vec<(&String, &Toolkit)> = self
             .map
             .iter()
-            .filter(|(name, _)| !active.contains(*name))
+            .filter(|(name, tk)| {
+                !active.contains(*name) && tk.tools.iter().any(|t| allowed_tools.contains(t))
+            })
             .collect();
         if available.is_empty() {
             return None;

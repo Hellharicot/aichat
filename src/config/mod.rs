@@ -1686,6 +1686,13 @@ impl Config {
                                     .map(|v| v.to_string())
                                     .filter(|v| declaration_names.contains(v)),
                             )
+                        } else if let Some(tk) = self.toolkits.get(item) {
+                            tool_names.extend(
+                                tk.tools
+                                    .iter()
+                                    .filter(|v| declaration_names.contains(*v))
+                                    .cloned(),
+                            );
                         } else if declaration_names.contains(item) {
                             tool_names.insert(item.to_string());
                         }
@@ -1726,11 +1733,16 @@ impl Config {
             }
 
             if !self.toolkits.is_empty() && !functions.is_empty() {
+                let allowed_tools: HashSet<String> =
+                    functions.iter().map(|f| f.name.clone()).collect();
                 functions.retain(|f| {
                     !self.toolkits.contains_tool(&f.name)
                         || self.toolkits.is_tool_active(&f.name, &self.active_toolkits)
                 });
-                if let Some(loader) = self.toolkits.loader_declaration(&self.active_toolkits) {
+                if let Some(loader) = self
+                    .toolkits
+                    .loader_declaration(&self.active_toolkits, &allowed_tools)
+                {
                     functions.push(loader);
                 }
             }
