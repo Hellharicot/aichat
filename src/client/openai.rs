@@ -395,6 +395,7 @@ pub fn openai_extract_chat_completions(data: &Value) -> Result<ChatCompletionsOu
         id: data["id"].as_str().map(|v| v.to_string()),
         input_tokens: data["usage"]["prompt_tokens"].as_u64(),
         output_tokens: data["usage"]["completion_tokens"].as_u64(),
+        cached_tokens: data["usage"]["prompt_tokens_details"]["cached_tokens"].as_u64(),
     };
     Ok(output)
 }

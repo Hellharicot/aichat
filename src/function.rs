@@ -331,7 +331,7 @@ impl ToolCall {
 
         cmd_args.push(json_data.to_string());
 
-        let output = match run_llm_function(cmd_name, cmd_args, envs)? {
+        let output = match run_llm_function_with_config(cmd_name, cmd_args, envs, Some(config))? {
             (0, Some(contents)) => {
                 let contents = truncate_tool_output(contents);
                 serde_json::from_str(&contents)
@@ -394,7 +394,16 @@ impl ToolCall {
 pub fn run_llm_function(
     cmd_name: String,
     cmd_args: Vec<String>,
+    envs: HashMap<String, String>,
+) -> Result<(i32, Option<String>)> {
+    run_llm_function_with_config(cmd_name, cmd_args, envs, None)
+}
+
+fn run_llm_function_with_config(
+    cmd_name: String,
+    cmd_args: Vec<String>,
     mut envs: HashMap<String, String>,
+    config: Option<&GlobalConfig>,
 ) -> Result<(i32, Option<String>)> {
     let prompt = format!("Call {cmd_name} {}", cmd_args.join(" "));
 
@@ -403,6 +412,11 @@ pub fn run_llm_function(
         let dir = Config::agent_functions_dir(&cmd_name).join("bin");
         if dir.exists() {
             bin_dirs.push(dir);
+        }
+    }
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            bin_dirs.insert(0, exe_dir.to_path_buf());
         }
     }
     bin_dirs.push(Config::functions_bin_dir());
@@ -416,6 +430,8 @@ pub fn run_llm_function(
 
     let temp_file = temp_file("-eval-", "");
     envs.insert("LLM_OUTPUT".into(), temp_file.display().to_string());
+    let usage_file = crate::utils::temp_file("-usage-", "");
+    envs.insert("AICHAT_USAGE_FILE".into(), usage_file.display().to_string());
 
     #[cfg(windows)]
     let cmd_name = polyfill_cmd_name(&cmd_name, &bin_dirs);
@@ -424,13 +440,43 @@ pub fn run_llm_function(
     }
     let exit_code = run_command(&cmd_name, &cmd_args, Some(envs))
         .map_err(|err| anyhow!("Unable to run {cmd_name}, {err}"))?;
+    if usage_file.exists() {
+        if let Ok(contents) = fs::read_to_string(&usage_file) {
+            let mut total_in = 0u64;
+            let mut total_cached = 0u64;
+            let mut total_out = 0u64;
+            let mut total_cost = 0.0f64;
+            let mut has_any = false;
+            for line in contents.lines().filter(|l| !l.trim().is_empty()) {
+                if let Ok(v) = serde_json::from_str::<Value>(line) {
+                    total_in += v["input"].as_u64().unwrap_or(0);
+                    total_cached += v["cached"].as_u64().unwrap_or(0);
+                    total_out += v["output"].as_u64().unwrap_or(0);
+                    total_cost += v["cost"].as_f64().unwrap_or(0.0);
+                    has_any = true;
+                }
+            }
+            if has_any {
+                if let Some(cfg) = config {
+                    cfg.write().record_subagent_usage(
+                        total_in,
+                        total_cached,
+                        total_out,
+                        total_cost,
+                    );
+                }
+            }
+        }
+        let _ = fs::remove_file(&usage_file);
+    }
     let mut output = None;
     if temp_file.exists() {
         let contents =
-            fs::read_to_string(temp_file).context("Failed to retrieve tool call output")?;
+            fs::read_to_string(&temp_file).context("Failed to retrieve tool call output")?;
         if !contents.is_empty() {
             output = Some(contents);
         }
+        let _ = fs::remove_file(&temp_file);
     };
     Ok((exit_code, output))
 }

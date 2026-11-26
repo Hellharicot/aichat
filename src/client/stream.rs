@@ -13,6 +13,7 @@ pub struct SseHandler {
     abort_signal: AbortSignal,
     buffer: String,
     tool_calls: Vec<ToolCall>,
+    usage: Option<(u64, u64, u64)>,
 }
 
 impl SseHandler {
@@ -22,6 +23,7 @@ impl SseHandler {
             abort_signal,
             buffer: String::new(),
             tool_calls: Vec::new(),
+            usage: None,
         }
     }
 
@@ -69,11 +71,18 @@ impl SseHandler {
         &self.tool_calls
     }
 
-    pub fn take(self) -> (String, Vec<ToolCall>) {
+    pub fn usage(&mut self, input_tokens: u64, cached_tokens: u64, output_tokens: u64) {
+        self.usage = Some((input_tokens, cached_tokens, output_tokens));
+    }
+
+    pub fn take_with_usage(self) -> (String, Vec<ToolCall>, Option<(u64, u64, u64)>) {
         let Self {
-            buffer, tool_calls, ..
+            buffer,
+            tool_calls,
+            usage,
+            ..
         } = self;
-        (buffer, tool_calls)
+        (buffer, tool_calls, usage)
     }
 }
 

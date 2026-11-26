@@ -524,6 +524,7 @@ fn extract_chat_completions(data: &Value) -> Result<ChatCompletionsOutput> {
         id: None,
         input_tokens: data["usage"]["inputTokens"].as_u64(),
         output_tokens: data["usage"]["outputTokens"].as_u64(),
+        cached_tokens: None,
     };
     Ok(output)
 }

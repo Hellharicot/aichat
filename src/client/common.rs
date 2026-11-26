@@ -1,3 +1,4 @@
+use crate::config::RoleLike;
 use super::*;
 
 use crate::{
@@ -293,6 +294,7 @@ pub struct ChatCompletionsOutput {
     pub id: Option<String>,
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
+    pub cached_tokens: Option<u64>,
 }
 
 impl ChatCompletionsOutput {
@@ -422,8 +424,19 @@ pub async fn call_chat_completions(
             let ChatCompletionsOutput {
                 mut text,
                 tool_calls,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
                 ..
             } = ret;
+            if let (Some(in_tok), Some(out_tok)) = (input_tokens, output_tokens) {
+                client.global_config().write().record_token_usage(
+                    input.role().model(),
+                    in_tok,
+                    cached_tokens.unwrap_or(0),
+                    out_tok,
+                );
+            }
             if !text.is_empty() {
                 if extract_code {
                     text = extract_code_block(&strip_think_tag(&text)).to_string();
@@ -457,9 +470,17 @@ pub async fn call_chat_completions_streaming(
 
     render_ret?;
 
-    let (text, tool_calls) = handler.take();
+    let (text, tool_calls, usage) = handler.take_with_usage();
     match send_ret {
         Ok(_) => {
+            if let Some((in_tok, cached_tok, out_tok)) = usage {
+                client.global_config().write().record_token_usage(
+                    input.role().model(),
+                    in_tok,
+                    cached_tok,
+                    out_tok,
+                );
+            }
             if !text.is_empty() && !text.ends_with('\n') {
                 println!();
             }

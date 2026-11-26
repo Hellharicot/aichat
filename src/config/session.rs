@@ -43,6 +43,20 @@ pub struct Session {
     messages: Vec<Message>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     data_urls: HashMap<String, String>,
+    #[serde(default)]
+    total_input_tokens: u64,
+    #[serde(default)]
+    total_cached_tokens: u64,
+    #[serde(default)]
+    total_output_tokens: u64,
+    #[serde(default)]
+    subagent_input_tokens: u64,
+    #[serde(default)]
+    subagent_cached_tokens: u64,
+    #[serde(default)]
+    subagent_output_tokens: u64,
+    #[serde(default)]
+    subagent_cost_usd: f64,
 
     #[serde(skip)]
     model: Model,
@@ -162,6 +176,23 @@ impl Session {
         }
         let (tokens, percent) = self.tokens_usage();
         data["total_tokens"] = tokens.into();
+        if self.total_input_tokens > 0
+            || self.total_output_tokens > 0
+            || self.subagent_cost_usd > 0.0
+        {
+            data["billed_input_tokens"] = self.total_input_tokens.into();
+            data["billed_cached_tokens"] = self.total_cached_tokens.into();
+            data["billed_output_tokens"] = self.total_output_tokens.into();
+            if self.subagent_input_tokens > 0 || self.subagent_output_tokens > 0 {
+                data["subagent_input_tokens"] = self.subagent_input_tokens.into();
+                data["subagent_cached_tokens"] = self.subagent_cached_tokens.into();
+                data["subagent_output_tokens"] = self.subagent_output_tokens.into();
+                data["subagent_cost_usd"] = format!("{:.4}", self.subagent_cost_usd).into();
+            }
+            if let Some(cost) = self.total_cost() {
+                data["total_cost_usd"] = format!("{cost:.4}").into();
+            }
+        }
         if let Some(max_input_tokens) = self.model().max_input_tokens() {
             data["max_input_tokens"] = max_input_tokens.into();
         }
@@ -215,9 +246,36 @@ impl Session {
             items.push(("max_input_tokens", max_input_tokens.to_string()));
         }
 
+        if self.total_input_tokens > 0
+            || self.total_output_tokens > 0
+            || self.subagent_cost_usd > 0.0
+        {
+            items.push(("billed_input_tokens", self.total_input_tokens.to_string()));
+            items.push(("billed_cached_tokens", self.total_cached_tokens.to_string()));
+            items.push(("billed_output_tokens", self.total_output_tokens.to_string()));
+            if self.subagent_input_tokens > 0 || self.subagent_output_tokens > 0 {
+                items.push((
+                    "subagent_tokens",
+                    format!(
+                        "{} in ({} cached) / {} out",
+                        self.subagent_input_tokens,
+                        self.subagent_cached_tokens,
+                        self.subagent_output_tokens
+                    ),
+                ));
+                items.push((
+                    "subagent_cost_usd",
+                    format!("${:.4}", self.subagent_cost_usd),
+                ));
+            }
+            if let Some(cost) = self.total_cost() {
+                items.push(("total_cost_usd", format!("${cost:.4}")));
+            }
+        }
+
         let mut lines: Vec<String> = items
             .iter()
-            .map(|(name, value)| format!("{name:<20}{value}"))
+            .map(|(name, value)| format!("{name:<23}{value}"))
             .collect();
 
         lines.push(String::new());
@@ -508,10 +566,59 @@ impl Session {
         Ok(())
     }
 
+    pub fn add_usage(&mut self, input_tokens: u64, cached_tokens: u64, output_tokens: u64) {
+        self.total_input_tokens += input_tokens;
+        self.total_cached_tokens += cached_tokens;
+        self.total_output_tokens += output_tokens;
+        self.dirty = true;
+    }
+
+    pub fn add_subagent_usage(
+        &mut self,
+        input_tokens: u64,
+        cached_tokens: u64,
+        output_tokens: u64,
+        cost: f64,
+    ) {
+        self.subagent_input_tokens += input_tokens;
+        self.subagent_cached_tokens += cached_tokens;
+        self.subagent_output_tokens += output_tokens;
+        self.subagent_cost_usd += cost;
+        self.dirty = true;
+    }
+
+    pub fn usage_tokens(&self) -> (u64, u64, u64) {
+        (
+            self.total_input_tokens + self.subagent_input_tokens,
+            self.total_cached_tokens + self.subagent_cached_tokens,
+            self.total_output_tokens + self.subagent_output_tokens,
+        )
+    }
+
+    pub fn total_cost(&self) -> Option<f64> {
+        let own = self.model.calculate_cost(
+            self.total_input_tokens,
+            self.total_cached_tokens,
+            self.total_output_tokens,
+        );
+        match (own, self.subagent_cost_usd > 0.0) {
+            (Some(c), _) => Some(c + self.subagent_cost_usd),
+            (None, true) => Some(self.subagent_cost_usd),
+            (None, false) => None,
+        }
+    }
+
     pub fn clear_messages(&mut self) {
         self.messages.clear();
         self.compressed_messages.clear();
         self.data_urls.clear();
+        self.total_input_tokens = 0;
+        self.total_cached_tokens = 0;
+        self.total_output_tokens = 0;
+        self.subagent_input_tokens = 0;
+        self.subagent_cached_tokens = 0;
+        self.subagent_output_tokens = 0;
+        self.subagent_cost_usd = 0.0;
         self.autoname = None;
         self.dirty = true;
         self.update_tokens();

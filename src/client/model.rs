@@ -174,6 +174,30 @@ impl Model {
         }
     }
 
+    pub fn cache_read_price(&self) -> Option<f64> {
+        self.data
+            .cache_read_price
+            .or_else(|| self.data.input_price.map(|p| p * 0.1))
+    }
+
+    pub fn calculate_cost(
+        &self,
+        input_tokens: u64,
+        cached_tokens: u64,
+        output_tokens: u64,
+    ) -> Option<f64> {
+        let in_price = self.data.input_price?;
+        let out_price = self.data.output_price?;
+        let cache_price = self.cache_read_price().unwrap_or(in_price * 0.1);
+        let uncached_input = input_tokens.saturating_sub(cached_tokens);
+        Some(
+            (uncached_input as f64 * in_price
+                + cached_tokens as f64 * cache_price
+                + output_tokens as f64 * out_price)
+                / 1_000_000.0,
+        )
+    }
+
     pub fn patch(&self) -> Option<&Value> {
         self.data.patch.as_ref()
     }
@@ -305,6 +329,8 @@ pub struct ModelData {
     pub input_price: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_price: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_read_price: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub patch: Option<Value>,
 

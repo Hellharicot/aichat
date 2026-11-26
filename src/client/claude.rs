@@ -348,6 +348,7 @@ pub fn claude_extract_chat_completions(data: &Value) -> Result<ChatCompletionsOu
         id: data["id"].as_str().map(|v| v.to_string()),
         input_tokens: data["usage"]["input_tokens"].as_u64(),
         output_tokens: data["usage"]["output_tokens"].as_u64(),
+        cached_tokens: None,
     };
     Ok(output)
 }

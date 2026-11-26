@@ -2066,6 +2066,13 @@ impl Config {
             output.insert("consume_tokens", tokens.to_string());
             output.insert("consume_percent", percent.to_string());
             output.insert("user_messages_len", session.user_messages_len().to_string());
+            if let Some(cost) = session.total_cost() {
+                output.insert("consume_cost", format!("{cost:.4}"));
+            }
+            let (billed_in, billed_cached, billed_out) = session.usage_tokens();
+            output.insert("billed_input_tokens", billed_in.to_string());
+            output.insert("billed_cached_tokens", billed_cached.to_string());
+            output.insert("billed_output_tokens", billed_out.to_string());
         }
         if let Some(rag) = &self.rag {
             output.insert("rag", rag.name().to_string());
@@ -2097,6 +2104,64 @@ impl Config {
         }
 
         output
+    }
+
+    pub fn record_token_usage(
+        &mut self,
+        model: &Model,
+        input_tokens: u64,
+        cached_tokens: u64,
+        output_tokens: u64,
+    ) {
+        let cost = model
+            .calculate_cost(input_tokens, cached_tokens, output_tokens)
+            .unwrap_or(0.0);
+        if let Some(session) = self.session.as_mut() {
+            session.add_usage(input_tokens, cached_tokens, output_tokens);
+        }
+        Self::append_usage_ipc(input_tokens, cached_tokens, output_tokens, cost);
+    }
+
+    pub fn record_subagent_usage(
+        &mut self,
+        input_tokens: u64,
+        cached_tokens: u64,
+        output_tokens: u64,
+        cost: f64,
+    ) {
+        if let Some(session) = self.session.as_mut() {
+            session.add_subagent_usage(input_tokens, cached_tokens, output_tokens, cost);
+        }
+        Self::append_usage_ipc(input_tokens, cached_tokens, output_tokens, cost);
+    }
+
+    fn append_usage_ipc(
+        input_tokens: u64,
+        cached_tokens: u64,
+        output_tokens: u64,
+        cost: f64,
+    ) {
+        if let Ok(path) = std::env::var("AICHAT_USAGE_FILE") {
+            if !path.is_empty() {
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&path)
+                {
+                    let line = serde_json::json!({
+                        "input": input_tokens,
+                        "cached": cached_tokens,
+                        "output": output_tokens,
+                        "cost": cost,
+                    });
+                    let _ = std::io::Write::write_all(
+                        &mut file,
+                        format!("{line}
+").as_bytes(),
+                    );
+                }
+            }
+        }
     }
 
     pub fn before_chat_completion(&mut self, input: &Input) -> Result<()> {
