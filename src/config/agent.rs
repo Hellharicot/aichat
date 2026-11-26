@@ -30,6 +30,22 @@ pub struct Agent {
 }
 
 impl Agent {
+    #[cfg(test)]
+    pub fn mock() -> Self {
+        Self {
+            name: "mock".to_string(),
+            config: AgentConfig::default(),
+            definition: AgentDefinition::default(),
+            shared_variables: IndexMap::new(),
+            session_variables: None,
+            shared_dynamic_instructions: None,
+            session_dynamic_instructions: None,
+            functions: Functions::default(),
+            rag: None,
+            model: Model::default(),
+        }
+    }
+
     pub async fn init(
         config: &GlobalConfig,
         name: &str,
@@ -48,6 +64,9 @@ impl Agent {
         } else {
             AgentConfig::new(&config.read())
         };
+        if agent_config.agent_prelude.is_none() {
+            agent_config.agent_prelude = config.read().agent_prelude.clone();
+        }
         let mut definition = AgentDefinition::load(&definition_file_path)?;
         if agent_config.use_tools.is_none()
             || (!config_path.exists() && definition.use_tools.is_some())

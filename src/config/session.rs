@@ -388,7 +388,7 @@ impl Session {
         if self.save_session_this_time {
             save_session = Some(true);
         }
-        if self.dirty && save_session != Some(false) {
+        if self.dirty && !self.is_empty() && save_session != Some(false) {
             let mut session_dir = session_dir.to_path_buf();
             let mut session_name = self.name().to_string();
             if save_session.is_none() {

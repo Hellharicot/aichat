@@ -121,6 +121,8 @@ pub struct Config {
     pub toolkits: Toolkits,
     #[serde(skip)]
     pub active_toolkits: HashSet<String>,
+    #[serde(skip)]
+    default_session: Option<String>,
 
     pub repl_prelude: Option<String>,
     pub cmd_prelude: Option<String>,
@@ -199,6 +201,7 @@ impl Default for Config {
             use_tools: None,
             toolkits: Default::default(),
             active_toolkits: Default::default(),
+            default_session: None,
 
             repl_prelude: None,
             cmd_prelude: None,
@@ -888,8 +891,14 @@ impl Config {
     }
 
     pub fn use_role_obj(&mut self, role: Role) -> Result<()> {
+        let default_session = self.default_session.clone();
         if self.agent.is_some() {
-            bail!("Cannot perform this operation because you are using a agent")
+            self.exit_agent()?;
+            if let Some(name) = default_session {
+                if self.session.is_none() {
+                    self.use_session(Some(&name))?;
+                }
+            }
         }
         if let Some(session) = self.session.as_mut() {
             session.guard_empty()?;
@@ -1083,9 +1092,7 @@ impl Config {
 
     pub fn use_session(&mut self, session_name: Option<&str>) -> Result<()> {
         if self.session.is_some() {
-            bail!(
-                "Already in a session, please run '.exit session' first to exit the current session."
-            );
+            self.exit_session()?;
         }
         let mut session;
         match session_name {
@@ -1162,6 +1169,7 @@ impl Config {
             session.exit(&sessions_dir, self.working_mode.is_repl())?;
             self.discontinuous_last_message();
             self.active_toolkits.clear();
+            self.default_session = None;
         }
         Ok(())
     }
@@ -1508,7 +1516,13 @@ impl Config {
             bail!("Please enable function calling before using the agent.");
         }
         if config.read().agent.is_some() {
-            bail!("Already in a agent, please run '.exit agent' first to exit the current agent.");
+            config.write().exit_agent()?;
+        }
+        if config.read().session.is_some() {
+            config.write().exit_session()?;
+        }
+        if config.read().role.is_some() {
+            config.write().exit_role()?;
         }
         let agent = Agent::init(config, agent_name, abort_signal).await?;
         let session = session_name.map(|v| v.to_string()).or_else(|| {
@@ -1522,6 +1536,7 @@ impl Config {
         config.write().agent = Some(agent);
         if let Some(session) = session {
             config.write().use_session(Some(&session))?;
+            config.write().default_session = Some(session);
         } else {
             config.write().init_agent_shared_variables()?;
         }
@@ -1649,9 +1664,11 @@ impl Config {
             }
             Some(("session", name)) => {
                 self.use_session(Some(name)).with_context(err_msg)?;
+                self.default_session = Some(name.to_string());
             }
             Some((session_name, role_name)) => {
                 self.use_session(Some(session_name)).with_context(err_msg)?;
+                self.default_session = Some(session_name.to_string());
                 if let Some(true) = self.session.as_ref().map(|v| v.is_empty()) {
                     self.use_role(role_name).with_context(err_msg)?;
                 }
@@ -2777,5 +2794,34 @@ where
     match value {
         Some(value) => value.to_string(),
         None => "null".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_session_restored_by_use_role_obj_with_agent() {
+        let mut config = Config::default();
+        config.function_calling = true;
+
+        // Simulate what use_agent does: exit session, recreate "temp" session,
+        // and set default_session (the fix).
+        config.exit_session().unwrap();
+        config.use_session(Some(TEMP_SESSION_NAME)).unwrap();
+        config.default_session = Some(TEMP_SESSION_NAME.to_string());
+
+        // Simulate an active agent, then apply a role: use_role_obj must
+        // restore the default session instead of leaving session = None.
+        config.agent = Some(Agent::mock());
+        let role = Role::new("default", "You are helpful.");
+        config.use_role_obj(role).unwrap();
+
+        assert_eq!(
+            config.session.as_ref().map(|s| s.name()),
+            Some(TEMP_SESSION_NAME)
+        );
+        assert!(config.session.as_ref().unwrap().role_name().is_some());
     }
 }
