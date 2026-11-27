@@ -1,14 +1,14 @@
 [package]
-name = "aichat"
-version = "0.30.0"
-edition = "2021"
-authors = ["sigoden <sigoden@gmail.com>"]
+name = "penpen"
+version = "0.1.0"
+edition = "2026"
+authors = ["hellharicot"]
 description = "All-in-one LLM CLI Tool"
 license = "MIT OR Apache-2.0"
-homepage = "https://github.com/sigoden/aichat"
-repository = "https://github.com/sigoden/aichat"
+homepage = "https://github.com/hellharicot/penpen"
+repository = "https://github.com/hellharicot/penpen"
 categories = ["command-line-utilities"]
-keywords = ["chatgpt", "llm", "cli", "ai", "repl"]
+keywords = ["llm", "cli", "ai", "repl", "chatgpt", "claude", "mistral", "gemini"]
 
 [dependencies]
 anyhow = "1.0.69"
@@ -25,7 +25,7 @@ serde_yaml = "0.9.17"
 tokio = { version = "1.34.0", features = ["rt", "time", "macros", "signal", "rt-multi-thread"] }
 tokio-graceful = "0.2.2"
 tokio-stream = { version = "0.1.15", default-features = false, features = ["sync"] }
-crossterm = "0.28.1"
+ratatui = { version = "0.29", features = ["crossterm"] }
 chrono = "0.4.23"
 bincode = { version = "2.0.0", features = ["serde", "std"], default-features = false }
 parking_lot = "0.12.1"
@@ -95,4 +95,4 @@ rand = "0.9.0"
 [profile.release]
 lto = true
 strip = true
-opt-level = "z"
+opt-level = 3
