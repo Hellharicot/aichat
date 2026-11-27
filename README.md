@@ -1,10 +1,10 @@
-# AIChat: All-in-one LLM CLI Tool
+# PenPen: All-in-one LLM CLI Tool
 
 [![CI](https://github.com/hellharicot/penpen/actions/workflows/ci.yaml/badge.svg)](https://github.com/hellharicot/penpen/actions/workflows/ci.yaml)
 [![Crates](https://img.shields.io/crates/v/penpen.svg)](https://crates.io/crates/penpen)
 [![Discord](https://img.shields.io/discord/1226737085453701222?label=Discord)](https://discord.gg/mr3ZZUB9hG)
 
-AIChat is an all-in-one LLM CLI tool featuring Shell Assistant, CMD & REPL Mode, RAG, AI Tools & Agents, and More. 
+PenPen is an all-in-one LLM CLI tool featuring Shell Assistant, CMD & REPL Mode, RAG, AI Tools & Agents, and More. 
 
 ## Install
 
@@ -28,7 +28,7 @@ Integrate seamlessly with over 20 leading LLM providers through a unified interf
 
 ### CMD Mode
 
-Explore powerful command-line functionalities with AIChat's CMD mode.
+Explore powerful command-line functionalities with PenPen's CMD mode.
 
 ![penpen-cmd](https://github.com/user-attachments/assets/6c58c549-1564-43cf-b772-e1c9fe91d19c)
 
@@ -40,7 +40,7 @@ Experience an interactive Chat-REPL with features like tab autocompletion, multi
 
 ### Shell Assistant
 
-Elevate your command-line efficiency. Describe your tasks in natural language, and let AIChat transform them into precise shell commands. AIChat intelligently adjusts to your OS and shell environment.
+Elevate your command-line efficiency. Describe your tasks in natural language, and let PenPen transform them into precise shell commands. PenPen intelligently adjusts to your OS and shell environment.
 
 ![penpen-execute](https://github.com/user-attachments/assets/0c77e901-0da2-4151-aefc-a2af96bbb004)
 
@@ -107,7 +107,7 @@ AI Agent = Instructions (Prompt) + Tools (Function Callings) + Documents (RAG).
 
 ### Local Server Capabilities
 
-AIChat includes a lightweight built-in HTTP server for easy deployment.
+PenPen includes a lightweight built-in HTTP server for easy deployment.
 
 ```
 $ penpen --serve
@@ -146,7 +146,7 @@ A web platform to compare different LLMs side-by-side.
 
 ## Custom Themes
 
-AIChat supports custom dark and light themes, which highlight response text and code blocks.
+PenPen supports custom dark and light themes, which highlight response text and code blocks.
 
 ![penpen-themes](https://github.com/hellharicot/penpen/assets/4012553/29fa8b79-031e-405d-9caa-70d24fa0acf8)
 
@@ -165,8 +165,9 @@ AIChat supports custom dark and light themes, which highlight response text and 
 
 ## License
 
-Copyright (c) 2023-2025 penpen-developers.
+Copyright (c) 2026 penpen-developers
+Copyright (c) 2023-2025 aichat-developers
 
-AIChat is made available under the terms of either the MIT License or the Apache License 2.0, at your option.
+PenPen is made available under the terms of either the MIT License or the Apache License 2.0, at your option.
 
 See the LICENSE-APACHE and LICENSE-MIT files for license details.
