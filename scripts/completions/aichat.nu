@@ -1,57 +1,57 @@
 module completions {
 
-  def "nu-complete aichat completions" [] {
+  def "nu-complete penpen completions" [] {
     [ "bash" "zsh" "fish" "powershell" "nushell" ]
   }
 
-  def "nu-complete aichat model" [] {
-    ^aichat --list-models |
+  def "nu-complete penpen model" [] {
+    ^penpen --list-models |
     | lines 
     | parse "{value}" 
   }
 
-  def "nu-complete aichat role" [] {
-    ^aichat --list-roles |
+  def "nu-complete penpen role" [] {
+    ^penpen --list-roles |
     | lines 
     | parse "{value}" 
   }
 
-  def "nu-complete aichat session" [] {
-    ^aichat --list-sessions |
+  def "nu-complete penpen session" [] {
+    ^penpen --list-sessions |
     | lines 
     | parse "{value}" 
   }
 
-  def "nu-complete aichat agent" [] {
-    ^aichat --list-agents |
+  def "nu-complete penpen agent" [] {
+    ^penpen --list-agents |
     | lines 
     | parse "{value}" 
   }
 
-  def "nu-complete aichat rag" [] {
-    ^aichat --list-rags |
+  def "nu-complete penpen rag" [] {
+    ^penpen --list-rags |
     | lines 
     | parse "{value}" 
   }
 
-  def "nu-complete aichat macro" [] {
-    ^aichat --list-macros |
+  def "nu-complete penpen macro" [] {
+    ^penpen --list-macros |
     | lines 
     | parse "{value}" 
   }
 
-  export extern aichat [
-    --model(-m): string@"nu-complete aichat model"      # Select a LLM model
+  export extern penpen [
+    --model(-m): string@"nu-complete penpen model"      # Select a LLM model
     --prompt                                            # Use the system prompt
-    --role(-r): string@"nu-complete aichat role"        # Select a role
-    --session(-s): string@"nu-complete aichat session"  # Start or join a session
+    --role(-r): string@"nu-complete penpen role"        # Select a role
+    --session(-s): string@"nu-complete penpen session"  # Start or join a session
     --empty-session                                     # Ensure the session is empty
     --save-session                                      # Ensure the new conversation is saved to the session
-    --agent(-a): string@"nu-complete aichat agent"      # Start a agent
+    --agent(-a): string@"nu-complete penpen agent"      # Start a agent
     --agent-variable                                    # Set agent variables
-    --rag: string@"nu-complete aichat rag"              # Start a RAG
+    --rag: string@"nu-complete penpen rag"              # Start a RAG
     --rebuild-rag                                       # Rebuild the RAG to sync document changes
-    --macro: string@"nu-complete aichat macro"          # Execute a macro
+    --macro: string@"nu-complete penpen macro"          # Execute a macro
     --serve                                             # Serve the LLM API and WebAPP
     --execute(-e)                                       # Execute commands in natural language
     --code(-c)                                          # Output code only

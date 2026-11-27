@@ -1,8 +1,8 @@
-#compdef aichat
+#compdef penpen
 
 autoload -U is-at-least
 
-_aichat() {
+_penpen() {
     typeset -A opt_args
     typeset -a _arguments_options
     local ret=1
@@ -61,21 +61,21 @@ _aichat() {
     case $state in
         models|roles|sessions|agents|rags|macros)
             local -a values expl
-            values=( ${(f)"$(_call_program values aichat --list-$state)"} )
+            values=( ${(f)"$(_call_program values penpen --list-$state)"} )
             _wanted values expl $state compadd -a values && ret=0
             ;;
     esac
     return ret
 }
 
-(( $+functions[_aichat_commands] )) ||
-_aichat_commands() {
+(( $+functions[_penpen_commands] )) ||
+_penpen_commands() {
     local commands; commands=()
-    _describe -t commands 'aichat commands' commands "$@"
+    _describe -t commands 'penpen commands' commands "$@"
 }
 
-if [ "$funcstack[1]" = "_aichat" ]; then
-    _aichat "$@"
+if [ "$funcstack[1]" = "_penpen" ]; then
+    _penpen "$@"
 else
-    compdef _aichat aichat
+    compdef _penpen penpen
 fi

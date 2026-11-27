@@ -431,7 +431,7 @@ fn run_llm_function_with_config(
     let temp_file = temp_file("-eval-", "");
     envs.insert("LLM_OUTPUT".into(), temp_file.display().to_string());
     let usage_file = crate::utils::temp_file("-usage-", "");
-    envs.insert("AICHAT_USAGE_FILE".into(), usage_file.display().to_string());
+    envs.insert("PENPEN_USAGE_FILE".into(), usage_file.display().to_string());
 
     #[cfg(windows)]
     let cmd_name = polyfill_cmd_name(&cmd_name, &bin_dirs);
