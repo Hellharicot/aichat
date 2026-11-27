@@ -165,8 +165,11 @@ PenPen supports custom dark and light themes, which highlight response text and 
 
 ## License
 
-Copyright (c) 2026 penpen-developers
-Copyright (c) 2023-2025 aichat-developers
+PenPen
+Copyright (c) 2026 Hellharicot
+
+This product is a fork of [aichat](https://github.com/sigoden/aichat),
+Copyright (c) 2023-2025 sigoden, licensed under MIT / Apache-2.0.
 
 PenPen is made available under the terms of either the MIT License or the Apache License 2.0, at your option.
 
